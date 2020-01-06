@@ -7,3 +7,10 @@ bin/
 lib/
 *vcxproj*
 .vscode/
+
+monitor
+a.out
+settings.json
+*.o
+build/*
+*.json
