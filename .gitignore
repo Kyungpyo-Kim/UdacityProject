@@ -12,5 +12,6 @@ monitor
 a.out
 settings.json
 *.o
-build/*
+CppND-System-Monitor-Project-Updated/build/*
 *.json
+
