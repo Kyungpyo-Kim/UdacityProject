@@ -14,7 +14,6 @@ class Processor {
   Processor();
   float Utilization();
 
-  // TODO: Declare any necessary private members
  private:
   int prevuser_;
   int prevnice_;
@@ -24,6 +23,9 @@ class Processor {
   int previrq_;
   int prevsoftirq_;
   int prevsteal_;
+
+  long prev_nonidle_;
+  long prev_idle_;
 };
 
 #endif

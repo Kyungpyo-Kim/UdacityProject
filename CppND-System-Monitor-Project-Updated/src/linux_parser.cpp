@@ -74,13 +74,9 @@ float LinuxParser::MemoryUtilization() {
     while (std::getline(filestream, line)) {
       std::replace(line.begin(), line.end(), ':', ' ');
       std::istringstream linestream(line);
-      while (linestream >> key >> value) {
-        if (key == "MemTotal") {
-          mem_total = stof(value);
-        }
-        if (key == "MemFree") {
-          mem_free = stof(value);
-        }
+      if (linestream >> key >> value) {
+        if (key == "MemTotal") mem_total = stof(value);
+        if (key == "MemFree") mem_free = stof(value);
       }
     }
   }
@@ -92,47 +88,72 @@ long LinuxParser::UpTime() {
   string uptime, spenttime;
   std::ifstream filestream(kProcDirectory + kUptimeFilename);
   if (filestream.is_open()) {
-    while (std::getline(filestream, line)) {
-      std::istringstream linestream(line);
-      while (linestream >> uptime >> spenttime) return stof(uptime);
-    }
+    std::getline(filestream, line);
+    std::istringstream linestream(line);
+    linestream >> uptime >> spenttime;
+    return stol(uptime);
   }
   return 0;
 }
 
-// TODO: Read and return the number of jiffies for the system
 long LinuxParser::Jiffies() {
-  
-  return 0;
+  vector<string> jiffies = CpuUtilization();
+  long total_jiffies_since_boot = 0;
+  for (string s : jiffies) {
+    total_jiffies_since_boot += atol(s.c_str());
+  }
+  return total_jiffies_since_boot;
 }
 
-// TODO: Read and return the number of active jiffies for a PID
-// REMOVE: [[maybe_unused]] once you define the function
-long LinuxParser::ActiveJiffies(int pid[[maybe_unused]]) { return 0; }
+long LinuxParser::ActiveJiffies(int pid) {
+  string line;
+  string value;
+  long utime, stime, cutime, cstime;
+  std::ifstream filestream(kProcDirectory + to_string(pid) + kStatFilename);
+  std::getline(filestream, line);
+  std::istringstream linestream(line);
+  for (int i = 1; i < 18; ++i) {
+    linestream >> value;
+    if (i == 14) utime = stol(value);
+    if (i == 15) stime = stol(value);
+    if (i == 16) cutime = stol(value);
+    if (i == 17) cstime = stol(value);
+  }
+  return utime + stime + cutime + cstime;
+}
 
-// TODO: Read and return the number of active jiffies for the system
-long LinuxParser::ActiveJiffies() { return 0; }
+long LinuxParser::ActiveJiffies() {
+  return LinuxParser::Jiffies() - LinuxParser::IdleJiffies();
+}
 
-// TODO: Read and return the number of idle jiffies for the system
-long LinuxParser::IdleJiffies() { return 0; }
+long LinuxParser::IdleJiffies() {
+  vector<string> jiffies = CpuUtilization();
+  // idle + iowait
+  return atol(jiffies[kIdle_].c_str()) + atol(jiffies[kIOwait_].c_str());
+}
 
 vector<string> LinuxParser::CpuUtilization() {
   string line;
   string key;
+  string user, nice, system, idle, iowit, irq, softirq, steal, guest, guestnice;
   vector<string> utils;
   std::ifstream filestream(kProcDirectory + kStatFilename);
   if (filestream.is_open()) {
-    while (std::getline(filestream, line)) {
-      std::istringstream linestream(line);
-      while (linestream >> key) {
-        if (key == "cpu") {
-          string value;
-          for (int i = 0; i < 10; ++i) {
-            linestream >> value;
-            utils.emplace_back(value);
-          }
-          return utils;
-        }
+    std::getline(filestream, line);
+    std::istringstream linestream(line);
+    while (linestream >> key) {
+      if (key == "cpu") {
+        linestream >> user >> nice >> system >> idle >> iowit >> irq >>
+            softirq >> steal >> guest >> guestnice;
+        utils.emplace_back(user);
+        utils.emplace_back(nice);
+        utils.emplace_back(system);
+        utils.emplace_back(idle);
+        utils.emplace_back(iowit);
+        utils.emplace_back(irq);
+        utils.emplace_back(softirq);
+        utils.emplace_back(steal);
+        return utils;
       }
     }
   }
@@ -179,10 +200,9 @@ string LinuxParser::Command(int pid) {
   string line;
   std::ifstream filestream(kProcDirectory + to_string(pid) + kCmdlineFilename);
   if (filestream.is_open()) {
-    while (std::getline(filestream, line))
-      return line;
+    while (std::getline(filestream, line)) return line;
   }
-  return string(); 
+  return string();
 }
 
 string LinuxParser::Ram(int pid) {
@@ -193,15 +213,14 @@ string LinuxParser::Ram(int pid) {
       std::replace(line.begin(), line.end(), ':', ' ');
       std::istringstream linestream(line);
       while (linestream >> key >> ram) {
-        if (key == "VmSize") 
-          return to_string( (stoi(ram) / 1024) ); // [MB]
+        if (key == "VmSize") return to_string((stoi(ram) / 1024));  // [MB]
       }
     }
   }
-  return string(); 
+  return string();
 }
 
-string LinuxParser::Uid(int pid) {  
+string LinuxParser::Uid(int pid) {
   string line, key, uid;
   std::ifstream filestream(kProcDirectory + to_string(pid) + kStatusFilename);
   if (filestream.is_open()) {
@@ -209,12 +228,11 @@ string LinuxParser::Uid(int pid) {
       std::replace(line.begin(), line.end(), ':', ' ');
       std::istringstream linestream(line);
       while (linestream >> key >> uid) {
-        if (key == "Uid") 
-          return uid;
+        if (key == "Uid") return uid;
       }
     }
   }
-  return string(); 
+  return string();
 }
 
 string LinuxParser::User(int pid) {
@@ -232,21 +250,20 @@ string LinuxParser::User(int pid) {
       }
     }
   }
-  return string(); 
+  return string();
 }
 
-long LinuxParser::UpTime(int pid) { 
+long LinuxParser::UpTime(int pid) {
   string line;
   string value;
   std::ifstream filestream(kProcDirectory + to_string(pid) + kStatFilename);
   if (filestream.is_open()) {
-    while (std::getline(filestream, line)) {
-      std::istringstream linestream(line);
-      for (int i=0; i < 22; ++i)
-        linestream >> value;    
-      return stoi(value) / sysconf(_SC_CLK_TCK);
-    }
+    std::getline(filestream, line);
+    std::istringstream linestream(line);
+    for (int i = 0; i < 22; ++i) linestream >> value;  // 22 starttime;
+    return stol(value);
   }
-  return 0; 
+  return 0;
 }
-  
+
+long LinuxParser::GetHertz() { return sysconf(_SC_CLK_TCK); }
